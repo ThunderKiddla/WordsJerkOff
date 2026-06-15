@@ -1,0 +1,92 @@
+[
+  {
+    "text": "青山",
+    "pos": "名词",
+    "category": "自然"
+  },
+  {
+    "text": "绿水",
+    "pos": "名词",
+    "category": "自然"
+  },
+  {
+    "text": "蔚蓝",
+    "pos": "形容词",
+    "category": "自然"
+  },
+  {
+    "text": "翠绿",
+    "pos": "形容词",
+    "category": "自然"
+  },
+  {
+    "text": "奔跑",
+    "pos": "动词",
+    "category": "动作"
+  },
+  {
+    "text": "飞翔",
+    "pos": "动词",
+    "category": "动作"
+  },
+  {
+    "text": "快速",
+    "pos": "副词",
+    "category": "状态"
+  },
+  {
+    "text": "缓慢",
+    "pos": "副词",
+    "category": "状态"
+  },
+  {
+    "text": "温暖",
+    "pos": "形容词",
+    "category": "情感"
+  },
+  {
+    "text": "快乐",
+    "pos": "形容词",
+    "category": "情感"
+  },
+  {
+    "text": "思念",
+    "pos": "动词",
+    "category": "情感"
+  },
+  {
+    "text": "梦想",
+    "pos": "名词",
+    "category": "情感"
+  },
+  {
+    "text": "阳光",
+    "pos": "名词",
+    "category": "自然"
+  },
+  {
+    "text": "微风",
+    "pos": "名词",
+    "category": "自然"
+  },
+  {
+    "text": "轻柔",
+    "pos": "形容词",
+    "category": "自然"
+  },
+  {
+    "text": "强烈",
+    "pos": "形容词",
+    "category": "状态"
+  },
+  {
+    "text": "静静地",
+    "pos": "副词",
+    "category": "状态"
+  },
+  {
+    "text": "努力地",
+    "pos": "副词",
+    "category": "状态"
+  }
+]
