@@ -1,0 +1,2587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于规则的文本生成器</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f5f7fa;
+            --panel-bg: #ffffff;
+            --text-color: #333;
+            --border-color: #ddd;
+            --sidebar-bg: #2c3e50;
+            --sidebar-text: #bdc3c7;
+            --sidebar-text-active: #ffffff;
+            --input-bg: #ffffff;
+            --tag-bg: #e3f2fd;
+            --tag-hover-bg: #bbdefb;
+            --table-header-bg: #f8f9fa;
+            --table-row-hover-bg: #f0f7ff;
+            --danger-color: #e74c3c;
+            --success-color: #2ecc71;
+            --animation-speed-multiplier: 1;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color calc(0.5s / var(--animation-speed-multiplier)) ease, color calc(0.5s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        /* 主题切换动画 */
+        .theme-transition {
+            transition: background-color calc(0.5s / var(--animation-speed-multiplier)) ease,
+                        color calc(0.5s / var(--animation-speed-multiplier)) ease,
+                        border-color calc(0.5s / var(--animation-speed-multiplier)) ease,
+                        box-shadow calc(0.5s / var(--animation-speed-multiplier)) ease,
+                        transform calc(0.3s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        /* 主题切换覆盖层 */
+        .theme-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            background: radial-gradient(circle at center, transparent 0%, transparent 40%, var(--primary-color) 200%);
+            opacity: 0;
+            transition: opacity calc(0.4s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        .theme-overlay.active {
+            opacity: 0.6;
+            animation: themePulse calc(0.6s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        /* 禁用主题动画 */
+        body.no-theme-animation .theme-overlay {
+            display: none !important;
+        }
+        
+        body.no-theme-animation * {
+            transition-duration: 0s !important;
+        }
+        
+        /* 禁用页面动画 */
+        body.no-page-animation .page {
+            transition: none !important;
+            opacity: 1 !important;
+            transform: none !important;
+        }
+        
+        /* 禁用按钮动画 */
+        body.no-button-animation .nav-btn,
+        body.no-button-animation .action-btn,
+        body.no-button-animation .toggle-switch .slider,
+        body.no-button-animation .toggle-switch .slider:before {
+            transition: none !important;
+        }
+        
+        body.no-button-animation .nav-btn::before,
+        body.no-button-animation .action-btn::after {
+            display: none !important;
+        }
+        
+        body.no-button-animation .nav-btn:active,
+        body.no-button-animation .action-btn:active {
+            transform: none !important;
+            filter: none !important;
+        }
+        
+        /* 禁用红色按钮脉冲动画 */
+        body.no-danger-pulse-animation .danger-btn {
+            animation: none !important;
+        }
+        
+        /* 禁用卡片动画 */
+        body.no-card-animation .theme-card,
+        body.no-card-animation .template-card,
+        body.no-card-animation .tag-item,
+        body.no-card-animation tr {
+            transition: none !important;
+        }
+        
+        body.no-card-animation .theme-card:hover,
+        body.no-card-animation .template-card:hover,
+        body.no-card-animation .tag-item:hover,
+        body.no-card-animation tr:hover {
+            transform: none !important;
+        }
+        
+        @keyframes themePulse {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            50% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1.2);
+                opacity: 0;
+            }
+        }
+
+        /* 侧边栏导航 */
+        .sidebar {
+            width: 200px;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-text-active);
+            display: flex;
+            flex-direction: column;
+            padding-top: 20px;
+            transition: transform calc(0.3s / var(--animation-speed-multiplier)) ease, background-color calc(0.5s / var(--animation-speed-multiplier)) ease;
+            z-index: 10;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: var(--sidebar-text);
+            padding: 15px 20px;
+            text-align: left;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all calc(0.2s / var(--animation-speed-multiplier)) ease;
+            position: relative;
+            overflow: hidden;
+            transform-origin: center left;
+        }
+
+        .nav-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left calc(0.5s / var(--animation-speed-multiplier));
+        }
+
+        .nav-btn:hover::before {
+            left: 100%;
+        }
+
+        .nav-btn:hover, .nav-btn.active {
+            background-color: var(--primary-color);
+            color: var(--sidebar-text-active);
+            transform: translateX(5px);
+        }
+        
+        .nav-btn:active {
+            transform: translateX(5px) scale(0.98);
+            filter: brightness(0.85);
+        }
+
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .page {
+            display: none;
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            max-width: 900px;
+            margin: 0 auto;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity calc(0.4s / var(--animation-speed-multiplier)) ease, transform calc(0.4s / var(--animation-speed-multiplier)) ease, background-color calc(0.5s / var(--animation-speed-multiplier)) ease, box-shadow calc(0.5s / var(--animation-speed-multiplier)) ease;
+        }
+
+        .page.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        h2 { 
+            margin-top: 0; 
+            border-bottom: 2px solid var(--primary-color); 
+            padding-bottom: 10px; 
+            display: inline-block;
+            animation: slideInFromLeft calc(0.5s / var(--animation-speed-multiplier)) ease-out;
+        }
+
+        /* 经典按钮样式 (默认) */
+        button.action-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+            transition: all calc(0.15s / var(--animation-speed-multiplier)) ease;
+            position: relative;
+            overflow: hidden;
+            transform-origin: center;
+        }
+        
+        button.action-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        button.action-btn:active {
+            filter: brightness(0.8);
+            transform: scale(0.95);
+        }
+        
+        button.danger-btn { 
+            background-color: var(--danger-color); 
+            animation: pulse calc(2s / var(--animation-speed-multiplier)) infinite;
+        }
+        
+        button.danger-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(231, 76, 60, 0.4);
+        }
+        
+        button.danger-btn:active {
+            filter: brightness(0.8);
+            transform: scale(0.95);
+        }
+        
+        button.success-btn { 
+            background-color: var(--success-color); 
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+        
+        button.success-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 12px rgba(46, 204, 113, 0.6);
+        }
+        
+        button.success-btn:active {
+            filter: brightness(0.8);
+            transform: scale(0.95);
+        }
+        
+        /* 新版按钮样式 */
+        body.new-button-style button.action-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: visible;
+        }
+        
+        body.new-button-style button.action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        body.new-button-style button.action-btn:active {
+            transform: translateY(0) scale(0.98);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        /* 新版 - 主要按钮 (primary) */
+        body.new-button-style button.action-btn:not(.danger-btn):not(.success-btn) {
+            background: linear-gradient(135deg, var(--primary-color), color-mix(in srgb, var(--primary-color) 85%, black));
+            box-shadow: 0 3px 10px color-mix(in srgb, var(--primary-color) 30%, transparent);
+        }
+        
+        body.new-button-style button.action-btn:not(.danger-btn):not(.success-btn):hover {
+            box-shadow: 0 5px 15px color-mix(in srgb, var(--primary-color) 40%, transparent);
+        }
+        
+        /* 新版 - 危险按钮 (danger) */
+        body.new-button-style button.danger-btn {
+            background: linear-gradient(135deg, var(--danger-color), color-mix(in srgb, var(--danger-color) 85%, black));
+            box-shadow: 0 3px 10px color-mix(in srgb, var(--danger-color) 30%, transparent);
+            animation: none;
+        }
+        
+        body.new-button-style button.danger-btn:hover {
+            box-shadow: 0 5px 15px color-mix(in srgb, var(--danger-color) 40%, transparent);
+        }
+        
+        /* 新版 - 成功按钮 (success) - 最高层级 */
+        body.new-button-style button.success-btn {
+            background: linear-gradient(135deg, var(--success-color), color-mix(in srgb, var(--success-color) 85%, black));
+            box-shadow: 0 4px 14px color-mix(in srgb, var(--success-color) 40%, transparent);
+            padding: 10px 24px;
+            font-size: 1.05em;
+            border: 2px solid color-mix(in srgb, var(--success-color) 70%, white);
+        }
+        
+        body.new-button-style button.success-btn:hover {
+            box-shadow: 0 6px 20px color-mix(in srgb, var(--success-color) 50%, transparent);
+            transform: translateY(-3px) scale(1.02);
+        }
+        
+        body.new-button-style button.success-btn:active {
+            transform: translateY(-1px) scale(0.99);
+        }
+        
+        /* 新版侧边栏按钮 */
+        body.new-button-style .nav-btn {
+            margin: 4px 10px;
+            border-radius: 8px;
+            transition: all calc(0.2s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        body.new-button-style .nav-btn:hover {
+            transform: translateX(8px);
+        }
+        
+        body.new-button-style .nav-btn.active {
+            box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 30%, transparent);
+        }
+
+        input, select, textarea {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+            background-color: var(--input-bg);
+            color: var(--text-color);
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(74, 144, 226, 0.5);
+        }
+
+        textarea { 
+            width: 100%; 
+            box-sizing: border-box; 
+            font-family: monospace; 
+        }
+
+        /* 表格样式 */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px; 
+            animation: fadeIn calc(0.5s / var(--animation-speed-multiplier)) ease-in;
+        }
+        th, td { 
+            border: 1px solid var(--border-color); 
+            padding: 10px; 
+            text-align: left; 
+            transition: background-color calc(0.5s / var(--animation-speed-multiplier)) ease, border-color calc(0.5s / var(--animation-speed-multiplier)) ease, color calc(0.5s / var(--animation-speed-multiplier)) ease;
+        }
+        th { 
+            background-color: var(--table-header-bg); 
+            position: sticky;
+            top: 0;
+            color: var(--text-color);
+        }
+        
+        tr:hover {
+            background-color: var(--table-row-hover-bg);
+            transform: scale(1.01);
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+        }
+
+        /* 生成结果区 */
+        #result-area {
+            width: 100%;
+            height: 150px;
+            background-color: var(--table-header-bg);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            font-size: 18px;
+            border-radius: 4px;
+            resize: none;
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+            color: var(--text-color);
+        }
+
+        .file-input-wrapper {
+            display: inline-block;
+            position: relative;
+            overflow: hidden;
+            vertical-align: middle;
+            animation: bounce calc(2s / var(--animation-speed-multiplier)) infinite;
+        }
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            top: 0; right: 0; margin: 0; padding: 0;
+            font-size: 20px; cursor: pointer; opacity: 0; filter: alpha(opacity=0);
+        }
+        
+        /* 模板卡片样式 */
+        .template-card {
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: var(--panel-bg);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all calc(0.5s / var(--animation-speed-multiplier)) ease;
+            animation: slideInFromRight calc(0.5s / var(--animation-speed-multiplier)) ease-out;
+        }
+        
+        .template-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        /* 标签输入区域样式 */
+        .tag-input-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 10px;
+            min-height: 40px;
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        .tag-input-container:focus-within {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px rgba(74, 144, 226, 0.5);
+        }
+        
+        .tag-item {
+            background-color: var(--tag-bg);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            animation: tagAppear calc(0.3s / var(--animation-speed-multiplier)) ease-out;
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+            color: var(--text-color);
+        }
+        
+        .tag-item:hover {
+            background-color: var(--tag-hover-bg);
+            transform: scale(1.05);
+        }
+        
+        .tag-item .remove-tag {
+            margin-left: 5px;
+            cursor: pointer;
+            color: #999;
+            font-weight: bold;
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        .tag-item .remove-tag:hover {
+            color: var(--danger-color);
+            transform: rotate(90deg);
+        }
+        
+        .tag-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 5px;
+        }
+        
+        /* 短语库样式 */
+        .phrase-card {
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background-color: var(--table-header-bg);
+            transition: all calc(0.3s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        .phrase-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        /* 动画定义 */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideInFromLeft {
+            from { 
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes slideInFromRight {
+            from { 
+                opacity: 0;
+                transform: translateX(50px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes tagAppear {
+            from { 
+                opacity: 0;
+                transform: scale(0.5);
+            }
+            to { 
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+            40% {transform: translateY(-5px);}
+            60% {transform: translateY(-3px);}
+        }
+        
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px #4a90e2; }
+            50% { box-shadow: 0 0 20px #4a90e2; }
+            100% { box-shadow: 0 0 5px #4a90e2; }
+        }
+        
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin calc(1s / var(--animation-speed-multiplier)) ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { -webkit-transform: rotate(360deg); }
+        }
+
+        /* 预设主题样式类 */
+        .theme-dark {
+            --primary-color: #5a8ad8;
+            --bg-color: #1a1a2e;
+            --panel-bg: #16213e;
+            --text-color: #e0e0e0;
+            --border-color: #444;
+            --sidebar-bg: #0f0f23;
+            --sidebar-text: #a0a0a0;
+            --sidebar-text-active: #ffffff;
+            --input-bg: #1e1e3f;
+            --tag-bg: #2d2d5a;
+            --tag-hover-bg: #3d3d7a;
+            --table-header-bg: #1f1f3a;
+            --table-row-hover-bg: #2a2a4a;
+        }
+
+        .theme-pink {
+            --primary-color: #e91e63;
+            --bg-color: #fce4ec;
+            --panel-bg: #fff;
+            --text-color: #333;
+            --border-color: #f8bbd0;
+            --sidebar-bg: #ad1457;
+            --sidebar-text: #f8bbd0;
+            --sidebar-text-active: #fff;
+            --input-bg: #fff;
+            --tag-bg: #f8bbd0;
+            --tag-hover-bg: #f48fb1;
+            --table-header-bg: #fce4ec;
+            --table-row-hover-bg: #fce4ec;
+        }
+
+        .theme-purple {
+            --primary-color: #9c27b0;
+            --bg-color: #f3e5f5;
+            --panel-bg: #fff;
+            --text-color: #333;
+            --border-color: #ce93d8;
+            --sidebar-bg: #6a1b9a;
+            --sidebar-text: #e1bee7;
+            --sidebar-text-active: #fff;
+            --input-bg: #fff;
+            --tag-bg: #e1bee7;
+            --tag-hover-bg: #ce93d8;
+            --table-header-bg: #f3e5f5;
+            --table-row-hover-bg: #ede7f6;
+        }
+
+        .theme-green {
+            --primary-color: #4caf50;
+            --bg-color: #e8f5e9;
+            --panel-bg: #fff;
+            --text-color: #333;
+            --border-color: #a5d6a7;
+            --sidebar-bg: #2e7d32;
+            --sidebar-text: #c8e6c9;
+            --sidebar-text-active: #fff;
+            --input-bg: #fff;
+            --tag-bg: #c8e6c9;
+            --tag-hover-bg: #a5d6a7;
+            --table-header-bg: #e8f5e9;
+            --table-row-hover-bg: #c8e6c933;
+        }
+
+        .theme-orange {
+            --primary-color: #ff9800;
+            --bg-color: #fff3e0;
+            --panel-bg: #fff;
+            --text-color: #333;
+            --border-color: #ffe0b2;
+            --sidebar-bg: #e65100;
+            --sidebar-text: #ffcc80;
+            --sidebar-text-active: #fff;
+            --input-bg: #fff;
+            --tag-bg: #ffe0b2;
+            --tag-hover-bg: #ffcc80;
+            --table-header-bg: #fff3e0;
+            --table-row-hover-bg: #fff8e1;
+        }
+
+        /* 主题卡片样式 */
+        .theme-card {
+            border: 2px solid var(--border-color);
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all calc(0.5s / var(--animation-speed-multiplier)) ease;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background-color: var(--panel-bg);
+        }
+
+        .theme-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        .theme-card.active {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 10px var(--primary-color);
+        }
+        
+        /* 切换开关样式 */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: calc(0.3s / var(--animation-speed-multiplier));
+            border-radius: 26px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: calc(0.3s / var(--animation-speed-multiplier));
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: var(--primary-color);
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .theme-preview {
+            width: 80px;
+            height: 50px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .theme-preview-top {
+            flex: 1;
+        }
+
+        .theme-preview-bottom {
+            flex: 2;
+            display: flex;
+        }
+
+        .theme-preview-left {
+            flex: 1;
+        }
+
+        .theme-preview-right {
+            flex: 3;
+        }
+
+        .theme-info {
+            flex: 1;
+        }
+
+        .theme-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .theme-desc {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        /* 自定义颜色选择区域 */
+        .custom-color-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .color-picker-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .color-picker-row label {
+            width: 120px;
+            font-weight: 500;
+        }
+        
+        .color-picker-row input[type="color"] {
+            width: 50px;
+            height: 35px;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }
+        
+        .color-picker-row input[type="text"] {
+            width: 100px;
+        }
+        
+        /* 折叠菜单样式 */
+        .collapse-section {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            background: var(--panel-bg);
+        }
+        
+        .collapse-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            background: color-mix(in srgb, var(--panel-bg) 95%, var(--primary-color));
+            transition: background calc(0.2s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        .collapse-header:hover {
+            background: color-mix(in srgb, var(--panel-bg) 90%, var(--primary-color));
+        }
+        
+        .collapse-header h3 {
+            margin: 0;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .collapse-icon {
+            transition: transform calc(0.2s / var(--animation-speed-multiplier)) ease;
+            font-size: 1.2em;
+        }
+        
+        .collapse-section.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+        
+        .collapse-content {
+            padding: 20px;
+            max-height: 2000px;
+            overflow: hidden;
+            transition: max-height calc(0.3s / var(--animation-speed-multiplier)) ease, padding calc(0.3s / var(--animation-speed-multiplier)) ease;
+        }
+        
+        .collapse-section.collapsed .collapse-content {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+<body>
+
+<!-- 临时脚本定义，必须在DOM加载前定义 -->
+<script>
+    window.ui = {
+        switchPage: function(pageId) {
+            window.pendingPageSwitch = pageId;
+        }
+    };
+</script>
+
+<!-- 侧边栏 -->
+<div class="sidebar">
+    <button class="nav-btn active" type="button" onclick="ui.switchPage('library')">📚 词库管理</button>
+    <button class="nav-btn" type="button" onclick="ui.switchPage('phrases')">💬 短语库</button>
+    <button class="nav-btn" type="button" onclick="ui.switchPage('template')">📝 模板定义</button>
+    <button class="nav-btn" type="button" onclick="ui.switchPage('generate')">🚀 生成引擎</button>
+    <button class="nav-btn" type="button" onclick="ui.switchPage('settings')">⚙️ 设置</button>
+</div>
+
+<!-- 主题切换覆盖层 -->
+<div class="theme-overlay" id="theme-overlay"></div>
+
+<!-- 主内容 -->
+<div class="main-content">
+    
+    <!-- 1. 词库管理页 -->
+    <div id="page-library" class="page active">
+        <h2>词库管理</h2>
+        <div style="margin-bottom: 20px;">
+            <input type="text" id="new-word-text" placeholder="词语 (如: 奔跑)">
+            <input type="text" id="new-word-pos" placeholder="词性 (如: 动词)" list="pos-options">
+            <datalist id="pos-options">
+                <option value="名词">
+                <option value="动词">
+                <option value="形容词">
+                <option value="副词">
+                <option value="代词">
+                <option value="介词">
+                <option value="连词">
+                <option value="助词">
+                <option value="叹词">
+                <option value="拟声词">
+            </datalist>
+            
+            <div style="margin-top: 10px;">
+                <label>标签 (分类、属性、情感等):</label>
+                <div class="tag-input-container" id="word-tags-container">
+                    <input type="text" class="tag-input" id="word-tag-input" placeholder="输入标签后按Enter添加" onkeydown="handleTagInput(event, 'word-tags-container', 'word-tag-input')">
+                </div>
+            </div>
+            
+            <button class="action-btn success-btn" type="button" onclick="library.addWord()">添加词语</button>
+            
+            <div style="float: right;">
+                <button class="action-btn" type="button" onclick="library.exportJSON()">⬇️ 导出 JSON</button>
+                <div class="file-input-wrapper">
+                    <button class="action-btn" type="button">⬆️ 导入 JSON</button>
+                    <input type="file" id="import-file" accept=".json" onchange="library.importJSON(this)" title="导入词库 JSON 文件">
+                </div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>词语</th>
+                    <th>词性</th>
+                    <th>标签</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="word-table-body">
+                <!-- 动态生成 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 2. 短语库管理页 -->
+    <div id="page-phrases" class="page">
+        <h2>短语库管理</h2>
+        <div style="margin-bottom: 20px;">
+            <input type="text" id="new-phrase-text" placeholder="短语 (如: 春暖花开)">
+            
+            <div style="margin-top: 10px;">
+                <label>短语标签:</label>
+                <div class="tag-input-container" id="phrase-tags-container">
+                    <input type="text" class="tag-input" id="phrase-tag-input" placeholder="输入标签后按Enter添加" onkeydown="handleTagInput(event, 'phrase-tags-container', 'phrase-tag-input')">
+                </div>
+            </div>
+            
+            <button class="action-btn success-btn" type="button" onclick="phrases.addPhrase()">添加短语</button>
+            
+            <div style="float: right;">
+                <button class="action-btn" type="button" onclick="phrases.exportJSON()">⬇️ 导出 JSON</button>
+                <div class="file-input-wrapper">
+                    <button class="action-btn" type="button">⬆️ 导入 JSON</button>
+                    <input type="file" id="import-phrase-file" accept=".json" onchange="phrases.importJSON(this)" title="导入短语库 JSON 文件">
+                </div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>短语</th>
+                    <th>标签</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="phrase-table-body">
+                <!-- 动态生成 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 3. 模板定义页 -->
+    <div id="page-template" class="page">
+        <h2>句子模板管理</h2>
+        
+        <!-- 模板列表 -->
+        <div id="template-list-section">
+            <h3>现有模板</h3>
+            <div id="template-list">
+                <!-- 模板列表将动态生成 -->
+            </div>
+            <button class="action-btn success-btn" type="button" onclick="templateManager.showAddTemplateForm()">➕ 添加新模板</button>
+        </div>
+        
+        <!-- 添加/编辑模板表单 -->
+        <div id="add-template-form" style="display:none;">
+            <h3 id="form-title">添加新模板</h3>
+            <div style="margin-bottom: 15px;">
+                <label>模板名称:</label>
+                <input type="text" id="template-name" placeholder="输入模板名称" title="模板名称">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label>模板内容:</label>
+                <div style="display:flex; gap: 10px; margin-top: 5px;">
+                    <textarea id="template-editor" rows="6" placeholder="在此构建您的模板..." style="flex: 1;" title="模板编辑区域"></textarea>
+                    <div style="width: 30%;">
+                        <h4>词库元素</h4>
+                        <div id="word-elements" style="max-height: 200px; overflow-y: auto;">
+                            <!-- 词库元素将动态生成 -->
+                        </div>
+                        
+                        <h4 style="margin-top: 15px;">短语库元素</h4>
+                        <div id="phrase-elements" style="max-height: 150px; overflow-y: auto;">
+                            <!-- 短语库元素将动态生成 -->
+                        </div>
+                        
+                        <h4 style="margin-top: 15px;">现有模板</h4>
+                        <div id="existing-templates-list" style="max-height: 150px; overflow-y: auto;">
+                            <!-- 现有模板将动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <button class="action-btn success-btn" type="button" onclick="templateManager.saveCurrentTemplate()">💾 保存模板</button>
+                <button class="action-btn" type="button" onclick="templateManager.hideAddTemplateForm()">❌ 取消</button>
+                <span id="template-save-msg" style="color: green; margin-left: 10px;"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 生成引擎页 -->
+    <div id="page-generate" class="page">
+        <h2>文本生成</h2>
+        <div>
+            <label>选择模板：</label>
+            <!-- 修复：移除错误的onchange事件，避免切换时重置选中状态 -->
+            <select id="template-select" title="选择模板"></select>
+        </div>
+        <br>
+        <button class="action-btn" type="button" onclick="generator.generate()">✨ 生成文本</button>
+        <button class="action-btn danger-btn" type="button" onclick="document.getElementById('result-area').value = ''">🗑️ 清空</button>
+        
+        <h3>生成结果：</h3>
+        <textarea id="result-area" readonly></textarea>
+    </div>
+
+    <!-- 5. 设置页 -->
+    <div id="page-settings" class="page">
+        <h2>设置</h2>
+        
+        <!-- 主题设置 - 折叠菜单 -->
+        <div class="collapse-section" id="collapse-theme">
+            <div class="collapse-header" onclick="toggleCollapse('collapse-theme')">
+                <h3>🎨 主题设置</h3>
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="collapse-content">
+                <h4 style="margin-top: 0;">预设主题</h4>
+                <div id="preset-themes-container">
+                    <!-- 预设主题卡片将动态生成 -->
+                </div>
+                
+                <div class="custom-color-section" style="margin-top: 20px;">
+                    <h4>自定义主题</h4>
+                    <p style="margin-bottom: 15px;">选择自定义颜色，创建专属主题</p>
+                    
+                    <div class="color-picker-row">
+                        <label>主色调</label>
+                        <input type="color" id="custom-primary" value="#4a90e2" onchange="themeManager.updateCustomColor('primary-color', this.value)" title="选择主色调">
+                        <input type="text" id="custom-primary-text" value="#4a90e2" onchange="themeManager.updateCustomColor('primary-color', this.value)" title="输入主色调的颜色值">
+                    </div>
+                    
+                    <div class="color-picker-row">
+                        <label>背景色</label>
+                        <input type="color" id="custom-bg" value="#f5f7fa" onchange="themeManager.updateCustomColor('bg-color', this.value)" title="选择背景色">
+                        <input type="text" id="custom-bg-text" value="#f5f7fa" onchange="themeManager.updateCustomColor('bg-color', this.value)" title="输入背景色的颜色值">
+                    </div>
+                    
+                    <div class="color-picker-row">
+                        <label>面板背景</label>
+                        <input type="color" id="custom-panel" value="#ffffff" onchange="themeManager.updateCustomColor('panel-bg', this.value)" title="选择面板背景色">
+                        <input type="text" id="custom-panel-text" value="#ffffff" onchange="themeManager.updateCustomColor('panel-bg', this.value)" title="输入面板背景色的颜色值">
+                    </div>
+                    
+                    <div class="color-picker-row">
+                        <label>文字颜色</label>
+                        <input type="color" id="custom-text" value="#333333" onchange="themeManager.updateCustomColor('text-color', this.value)" title="选择文字颜色">
+                        <input type="text" id="custom-text-text" value="#333333" onchange="themeManager.updateCustomColor('text-color', this.value)" title="输入文字颜色的颜色值">
+                    </div>
+                    
+                    <div class="color-picker-row">
+                        <label>边框颜色</label>
+                        <input type="color" id="custom-border" value="#dddddd" onchange="themeManager.updateCustomColor('border-color', this.value)" title="选择边框颜色">
+                        <input type="text" id="custom-border-text" value="#dddddd" onchange="themeManager.updateCustomColor('border-color', this.value)" title="输入边框颜色的颜色值">
+                    </div>
+                    
+                    <div class="color-picker-row">
+                        <label>侧边栏背景</label>
+                        <input type="color" id="custom-sidebar" value="#2c3e50" onchange="themeManager.updateCustomColor('sidebar-bg', this.value)" title="选择侧边栏背景色">
+                        <input type="text" id="custom-sidebar-text" value="#2c3e50" onchange="themeManager.updateCustomColor('sidebar-bg', this.value)" title="输入侧边栏背景色的颜色值">
+                    </div>
+                    
+                    <div style="margin-top: 20px;">
+                        <button class="action-btn success-btn" type="button" onclick="themeManager.saveCustomTheme()">💾 保存自定义主题</button>
+                        <button class="action-btn" type="button" onclick="themeManager.resetToDefault()">↩️ 重置默认</button>
+                        <span id="theme-save-msg" style="color: green; margin-left: 10px;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 动画设置 - 折叠菜单 -->
+        <div class="collapse-section" id="collapse-animation">
+            <div class="collapse-header" onclick="toggleCollapse('collapse-animation')">
+                <h3>✨ 动画效果设置</h3>
+                <span class="collapse-icon">▼</span>
+            </div>
+            <div class="collapse-content">
+                <div class="animation-settings">
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>主题切换动画</strong>
+                                <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">切换主题时的脉冲动画效果</p>
+                            </div>
+                            <label class="toggle-switch" title="主题切换动画">
+                                <input type="checkbox" id="animation-theme-toggle" checked onchange="settingsManager.toggleAnimation('theme')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>页面切换动画</strong>
+                                <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">页面间切换的淡入淡出动画</p>
+                            </div>
+                            <label class="toggle-switch" title="页面切换动画">
+                                <input type="checkbox" id="animation-page-toggle" checked onchange="settingsManager.toggleAnimation('page')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>按钮点击动画</strong>
+                                <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">按钮悬停和点击的反馈动画</p>
+                            </div>
+                            <label class="toggle-switch" title="按钮点击动画">
+                                <input type="checkbox" id="animation-button-toggle" checked onchange="settingsManager.toggleAnimation('button')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>卡片悬停动画</strong>
+                                <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">主题卡片和模板卡片的悬停效果</p>
+                            </div>
+                            <label class="toggle-switch" title="卡片悬停动画">
+                                <input type="checkbox" id="animation-card-toggle" checked onchange="settingsManager.toggleAnimation('card')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>红色按钮脉冲动画</strong>
+                                <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">危险按钮的发光脉冲动画效果</p>
+                            </div>
+                            <label class="toggle-switch" title="红色按钮脉冲动画">
+                                <input type="checkbox" id="animation-danger-pulse-toggle" checked onchange="settingsManager.toggleAnimation('dangerPulse')">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>新版按钮样式</strong>
+                                <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">使用更现代的按钮设计，具有更好的视觉层级</p>
+                            </div>
+                            <label class="toggle-switch" title="新版按钮样式">
+                                <input type="checkbox" id="button-style-toggle" checked onchange="settingsManager.toggleButtonStyle()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-row" style="margin: 15px 0; padding: 10px 0;">
+                        <div style="margin-bottom: 10px;">
+                            <strong>动画速度</strong>
+                            <p style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin: 5px 0 0 0;">调整所有动画的播放速度</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="font-size: 0.9em;">慢</span>
+                            <input type="range" id="animation-speed" min="0.5" max="2" step="0.1" value="1" onchange="settingsManager.updateAnimationSpeed(this.value)" title="动画速度" style="flex: 1;">
+                            <span style="font-size: 0.9em;">快</span>
+                            <span id="animation-speed-value" style="min-width: 60px; text-align: right; font-weight: bold;">1.0x</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 25px;">
+                        <button class="action-btn" type="button" onclick="settingsManager.resetAll()">↩️ 重置所有设置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+/**
+ * 折叠菜单切换函数
+ */
+function toggleCollapse(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (section) {
+        section.classList.toggle('collapsed');
+        
+        // 保存折叠状态到 localStorage
+        const collapseStates = JSON.parse(localStorage.getItem('collapseStates') || '{}');
+        collapseStates[sectionId] = section.classList.contains('collapsed');
+        localStorage.setItem('collapseStates', JSON.stringify(collapseStates));
+    }
+}
+
+/**
+ * 加载折叠菜单状态
+ */
+function loadCollapseStates() {
+    const collapseStates = JSON.parse(localStorage.getItem('collapseStates') || '{}');
+    Object.keys(collapseStates).forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section && collapseStates[sectionId]) {
+            section.classList.add('collapsed');
+        }
+    });
+}
+
+/**
+ * 通用标签输入处理函数
+ */
+function handleTagInput(event, containerId, inputId) {
+    if (event.key === 'Enter' && event.target.value.trim()) {
+        event.preventDefault();
+        const tagText = event.target.value.trim();
+        const container = document.getElementById(containerId);
+        
+        const tagItem = document.createElement('div');
+        tagItem.className = 'tag-item';
+        tagItem.innerHTML = `<span>${tagText}</span><span class="remove-tag" onclick="this.parentElement.remove()">×</span>`;
+        
+        const inputElement = document.getElementById(inputId);
+        container.insertBefore(tagItem, inputElement);
+        
+        event.target.value = '';
+    }
+}
+
+/**
+ * 模块 0: UI核心管理
+ */
+window.ui = {
+    // 页面切换核心方法
+    switchPage: function(pageId) {
+        document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.nav-btn[onclick="ui.switchPage('${pageId}')"]`)?.classList.add('active');
+        
+        document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+        const targetPage = document.getElementById(`page-${pageId}`);
+        if (targetPage) {
+            targetPage.classList.add('active');
+        }
+        
+        if (pageId === 'generate') {
+            this.updateGenerateView();
+        } else if (pageId === 'template') {
+            templateManager.renderTemplateList();
+            this.renderWordElements();
+            this.renderPhraseElements();
+            this.renderExistingTemplatesList();
+        } else if (pageId === 'settings') {
+            themeManager.renderPresetThemes();
+            themeManager.updateColorPickers();
+            settingsManager.updateUI();
+        }
+    },
+    
+    // 渲染词库表格
+    renderWordTable: function() {
+        const tbody = document.getElementById('word-table-body');
+        tbody.innerHTML = '';
+        
+        if (!window.library || window.library.words.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">暂无词语数据</td></tr>';
+            return;
+        }
+        
+        window.library.words.forEach(word => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${word.text}</td>
+                <td>${word.pos}</td>
+                <td>${word.tags?.join(', ') || '-'}</td>
+                <td><button class="action-btn danger-btn" onclick="library.deleteWord(${word.id})">删除</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    },
+    
+    // 渲染短语库表格
+    renderPhraseTable: function() {
+        const tbody = document.getElementById('phrase-table-body');
+        tbody.innerHTML = '';
+        
+        if (!window.phrases || window.phrases.phrases.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">暂无短语数据</td></tr>';
+            return;
+        }
+        
+        window.phrases.phrases.forEach(phrase => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${phrase.text}</td>
+                <td>${phrase.tags?.join(', ') || '-'}</td>
+                <td><button class="action-btn danger-btn" onclick="phrases.deletePhrase(${phrase.id})">删除</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    },
+    
+    // 更新生成页面视图（模板下拉框）- 优化：保留当前选中值
+    updateGenerateView: function() {
+        const select = document.getElementById('template-select');
+        // 记录当前选中的值，重绘后恢复
+        const currentSelected = select.value;
+        select.innerHTML = '';
+        
+        if (!window.generator || window.generator.savedTemplates.length === 0) {
+            select.innerHTML = '<option value="">暂无模板</option>';
+            return;
+        }
+        
+        window.generator.savedTemplates.forEach(template => {
+            const option = document.createElement('option');
+            option.value = template.name;
+            option.textContent = template.name;
+            select.appendChild(option);
+        });
+
+        // 恢复之前选中的模板；如果之前的模板被删除了，就默认选第一个
+        if (currentSelected && window.generator.savedTemplates.some(t => t.name === currentSelected)) {
+            select.value = currentSelected;
+        }
+    },
+    
+    // 渲染词库元素到模板编辑页
+    renderWordElements: function() {
+        const container = document.getElementById('word-elements');
+        container.innerHTML = '';
+        
+        const attrs = window.library?.getUniqueAttributes() || { posList: [], uniqueTags: [] };
+        
+        // 添加按词性标题
+        const posTitle = document.createElement('div');
+        posTitle.style.fontWeight = 'bold';
+        posTitle.style.marginBottom = '5px';
+        posTitle.textContent = '按词性:';
+        container.appendChild(posTitle);
+        
+        // 添加词性按钮
+        attrs.posList.forEach(pos => {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = pos;
+            btn.onclick = () => {
+                document.getElementById('template-editor').value += `[词性:${pos}]`;
+            };
+            container.appendChild(btn);
+        });
+        
+        // 添加按标签标题
+        const tagTitle = document.createElement('div');
+        tagTitle.style.fontWeight = 'bold';
+        tagTitle.style.marginTop = '10px';
+        tagTitle.style.marginBottom = '5px';
+        tagTitle.textContent = '按标签:';
+        container.appendChild(tagTitle);
+        
+        // 添加标签按钮
+        attrs.uniqueTags.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = tag;
+            btn.style.marginBottom = '5px';
+            btn.onclick = () => {
+                document.getElementById('template-editor').value += `[词语标签:${tag}]`;
+            };
+            container.appendChild(btn);
+        });
+    },
+    
+    // 渲染短语库元素到模板编辑页
+    renderPhraseElements: function() {
+        const container = document.getElementById('phrase-elements');
+        container.innerHTML = '';
+        
+        const tags = window.phrases?.getUniqueTags() || [];
+        
+        if (tags.length === 0) {
+            container.innerHTML = '<div>暂无短语标签</div>';
+            return;
+        }
+        
+        tags.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = tag;
+            btn.style.marginBottom = '5px';
+            btn.onclick = () => {
+                document.getElementById('template-editor').value += `[短语标签:${tag}]`;
+            };
+            container.appendChild(btn);
+        });
+    },
+    
+    // 渲染现有模板到模板编辑页
+    renderExistingTemplatesList: function() {
+        const container = document.getElementById('existing-templates-list');
+        container.innerHTML = '';
+        
+        const templates = window.generator?.savedTemplates || [];
+        
+        if (templates.length === 0) {
+            container.innerHTML = '<div>暂无模板</div>';
+            return;
+        }
+        
+        templates.forEach(template => {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.textContent = template.name;
+            btn.style.marginBottom = '5px';
+            btn.onclick = () => {
+                document.getElementById('template-editor').value += `[模板:${template.name}]`;
+            };
+            container.appendChild(btn);
+        });
+    }
+};
+
+/**
+ * 模块 1: 词库管理类
+ */
+class WordLibrary {
+    constructor() {
+        this.storageKey = 'text_gen_library';
+        this.words = [];
+    }
+
+    load() {
+        const data = localStorage.getItem(this.storageKey);
+        if (data) {
+            this.words = JSON.parse(data);
+        } else {
+            this.words = [
+                { id: 1, text: "蔚蓝", pos: "形容词", tags: ["颜色", "天空", "美丽"] },
+                { id: 2, text: "大海", pos: "名词", tags: ["自然", "水", "广阔"] },
+                { id: 3, text: "奔跑", pos: "动词", tags: ["动作", "快速", "运动"] },
+                { id: 4, text: "小猫", pos: "名词", tags: ["动物", "可爱", "宠物"] },
+                { id: 5, text: "快乐地", pos: "副词", tags: ["状态", "积极", "情感"] }
+            ];
+            this.save();
+        }
+        window.ui.renderWordTable();
+    }
+
+    save() {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.words));
+        window.ui.renderWordTable();
+    }
+
+    addWord() {
+        const text = document.getElementById('new-word-text').value.trim();
+        const pos = document.getElementById('new-word-pos').value.trim();
+        
+        const tagContainer = document.getElementById('word-tags-container');
+        const tags = Array.from(tagContainer.querySelectorAll('.tag-item span')).map(span => span.textContent);
+
+        if (!text || !pos) {
+            alert("词语和词性为必填项！");
+            return;
+        }
+
+        this.words.push({
+            id: Date.now(),
+            text,
+            pos,
+            tags: tags
+        });
+        
+        document.getElementById('new-word-text').value = '';
+        document.getElementById('new-word-pos').value = '';
+        
+        const tagContainerEl = document.getElementById('word-tags-container');
+        tagContainerEl.innerHTML = '<input type="text" class="tag-input" id="word-tag-input" placeholder="输入标签后按Enter添加" onkeydown="handleTagInput(event, \'word-tags-container\', \'word-tag-input\')">';
+        
+        this.save();
+        this.animateSuccess('new-word-text');
+    }
+
+    deleteWord(id) {
+        if(confirm('确定删除这个词吗？')) {
+            this.words = this.words.filter(w => w.id !== id);
+            this.save();
+            const row = document.querySelector(`#word-table-body tr:has(button[onclick="window.library.deleteWord(${id})"])`);
+            if(row) {
+                this.animateDeletion(row);
+            }
+        }
+    }
+
+    exportJSON() {
+        const dataStr = JSON.stringify(this.words, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `word_library_${new Date().getTime()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        this.animateSuccess('page-library');
+    }
+
+    importJSON(inputElement) {
+        const file = inputElement.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedWords = JSON.parse(e.target.result);
+                if (Array.isArray(importedWords)) {
+                    importedWords.forEach(w => {
+                        w.id = Date.now() + Math.random();
+                        this.words.push(w);
+                    });
+                    this.save();
+                    alert(`成功导入 ${importedWords.length} 个词语！`);
+                    inputElement.value = '';
+                    this.animateSuccess('page-library');
+                } else {
+                    alert("JSON 格式错误：根节点必须是数组。");
+                }
+            } catch (err) {
+                alert("文件解析失败：" + err.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    getUniqueAttributes() {
+        const posList = [...new Set(this.words.flatMap(w => w.pos))];
+        const allTags = this.words.flatMap(w => w.tags || []);
+        const uniqueTags = [...new Set(allTags)];
+        return { posList, uniqueTags };
+    }
+    
+    animateSuccess(elementId) {
+        const element = document.getElementById(elementId) || document.querySelector(elementId);
+        if(element) {
+            element.style.animation = 'glow 0.5s ease-in-out';
+            setTimeout(() => {
+                element.style.animation = '';
+            }, 500);
+        }
+    }
+    
+    animateDeletion(element) {
+        element.style.transition = 'all 0.5s ease';
+        element.style.opacity = '0';
+        element.style.transform = 'translateX(-100%)';
+        setTimeout(() => {
+            element.remove();
+        }, 500);
+    }
+}
+
+/**
+ * 模块 1.5: 短语库管理类
+ */
+class PhraseLibrary {
+    constructor() {
+        this.storageKey = 'text_gen_phrases';
+        this.phrases = [];
+    }
+
+    load() {
+        const data = localStorage.getItem(this.storageKey);
+        if (data) {
+            this.phrases = JSON.parse(data);
+        } else {
+            this.phrases = [
+                { id: 1, text: "春暖花开", tags: ["季节", "美好", "希望"] },
+                { id: 2, text: "风和日丽", tags: ["天气", "美好", "舒适"] },
+                { id: 3, text: "鸟语花香", tags: ["自然", "美好", "生机"] }
+            ];
+            this.save();
+        }
+        window.ui.renderPhraseTable();
+    }
+
+    save() {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.phrases));
+        window.ui.renderPhraseTable();
+    }
+
+    addPhrase() {
+        const text = document.getElementById('new-phrase-text').value.trim();
+        
+        const tagContainer = document.getElementById('phrase-tags-container');
+        const tags = Array.from(tagContainer.querySelectorAll('.tag-item span')).map(span => span.textContent);
+
+        if (!text) {
+            alert("短语不能为空！");
+            return;
+        }
+
+        this.phrases.push({
+            id: Date.now(),
+            text,
+            tags: tags
+        });
+        
+        document.getElementById('new-phrase-text').value = '';
+        
+        const tagContainerEl = document.getElementById('phrase-tags-container');
+        tagContainerEl.innerHTML = '<input type="text" class="tag-input" id="phrase-tag-input" placeholder="输入标签后按Enter添加" onkeydown="handleTagInput(event, \'phrase-tags-container\', \'phrase-tag-input\')">';
+        
+        this.save();
+        this.animateSuccess('new-phrase-text');
+    }
+
+    deletePhrase(id) {
+        if(confirm('确定删除这个短语吗？')) {
+            this.phrases = this.phrases.filter(p => p.id !== id);
+            this.save();
+            const row = document.querySelector(`#phrase-table-body tr:has(button[onclick="window.phrases.deletePhrase(${id})"])`);
+            if(row) {
+                this.animateDeletion(row);
+            }
+        }
+    }
+
+    exportJSON() {
+        const dataStr = JSON.stringify(this.phrases, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `phrase_library_${new Date().getTime()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        this.animateSuccess('page-phrases');
+    }
+
+    importJSON(inputElement) {
+        const file = inputElement.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedPhrases = JSON.parse(e.target.result);
+                if (Array.isArray(importedPhrases)) {
+                    importedPhrases.forEach(p => {
+                        p.id = Date.now() + Math.random();
+                        this.phrases.push(p);
+                    });
+                    this.save();
+                    alert(`成功导入 ${importedPhrases.length} 个短语！`);
+                    inputElement.value = '';
+                    this.animateSuccess('page-phrases');
+                } else {
+                    alert("JSON 格式错误：根节点必须是数组。");
+                }
+            } catch (err) {
+                alert("文件解析失败：" + err.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    getUniqueTags() {
+        const allTags = this.phrases.flatMap(p => p.tags || []);
+        return [...new Set(allTags)];
+    }
+    
+    animateSuccess(elementId) {
+        const element = document.getElementById(elementId) || document.querySelector(elementId);
+        if(element) {
+            element.style.animation = 'glow 0.5s ease-in-out';
+            setTimeout(() => {
+                element.style.animation = '';
+            }, 500);
+        }
+    }
+    
+    animateDeletion(element) {
+        element.style.transition = 'all 0.5s ease';
+        element.style.opacity = '0';
+        element.style.transform = 'translateX(-100%)';
+        setTimeout(() => {
+            element.remove();
+        }, 500);
+    }
+}
+
+/**
+ * 模块 2: 模板解析器
+ */
+class TemplateParser {
+    constructor() {
+        this.regex = /\[(词性|标签|词语标签|短语标签|模板):([^\]]+)\]/g;
+    }
+
+    parse(templateStr) {
+        const rules = [];
+        let lastIndex = 0;
+        let match;
+
+        this.regex.lastIndex = 0;
+
+        while ((match = this.regex.exec(templateStr)) !== null) {
+            if (match.index > lastIndex) {
+                const staticText = templateStr.substring(lastIndex, match.index);
+                rules.push({ type: 'static', value: staticText });
+            }
+
+            const [, constraintType, constraintValue] = match;
+            
+            let constraintValues = [constraintValue.trim()];
+            if(constraintValue.includes(',')) {
+                constraintValues = constraintValue.split(',').map(v => v.trim());
+            }
+            
+            rules.push({
+                type: 'rule',
+                constraintType: constraintType,
+                constraintValues: constraintValues,
+                actualConstraintType: constraintType === '标签' ? '词语标签' : constraintType
+            });
+
+            lastIndex = this.regex.lastIndex;
+        }
+
+        if (lastIndex < templateStr.length) {
+            rules.push({ type: 'static', value: templateStr.substring(lastIndex) });
+        }
+
+        return rules;
+    }
+}
+
+/**
+ * 模块 3: 生成引擎
+ */
+class TextGenerator {
+    constructor(library, phraseLibrary, parser) {
+        this.library = library;
+        this.phraseLibrary = phraseLibrary;
+        this.parser = parser;
+        this.savedTemplates = [];
+        this.loadTemplates();
+    }
+
+    loadTemplates() {
+        const data = localStorage.getItem('text_gen_templates');
+        if (data) {
+            this.savedTemplates = JSON.parse(data);
+        } else {
+            this.savedTemplates = [
+                { name: "默认示例", content: "[词性:形容词] 的 [词性:名词] 正在 [词性:动词]。" },
+                { name: "词语标签示例", content: "[词语标签:自然] [词性:名词] 和 [词语标签:动物] [词性:名词] [词性:动词]。" },
+                { name: "短语标签示例", content: "景色[短语标签:美好]，让人感到[短语标签:舒适]。" }
+            ];
+            this.saveTemplates();
+        }
+        window.ui.updateGenerateView();
+    }
+
+    saveTemplates() {
+        localStorage.setItem('text_gen_templates', JSON.stringify(this.savedTemplates));
+        window.ui.updateGenerateView();
+    }
+
+    addTemplate(name, content) {
+        if (this.savedTemplates.some(t => t.name === name)) {
+            return { success: false, message: '模板名称已存在！' };
+        }
+        this.savedTemplates.push({ name, content });
+        this.saveTemplates();
+        return { success: true, message: '模板保存成功！' };
+    }
+
+    updateTemplate(oldName, newName, newContent) {
+        const index = this.savedTemplates.findIndex(t => t.name === oldName);
+        if (index === -1) {
+            return { success: false, message: '模板不存在！' };
+        }
+        if (newName !== oldName && this.savedTemplates.some(t => t.name === newName)) {
+            return { success: false, message: '模板名称已存在！' };
+        }
+        this.savedTemplates[index] = { name: newName, content: newContent };
+        this.saveTemplates();
+        return { success: true, message: '模板更新成功！' };
+    }
+
+    deleteTemplate(name) {
+        this.savedTemplates = this.savedTemplates.filter(t => t.name !== name);
+        this.saveTemplates();
+        return { success: true, message: '模板删除成功！' };
+    }
+
+    getCurrentTemplateContent(name) {
+        const t = this.savedTemplates.find(t => t.name === name);
+        return t ? t.content : "";
+    }
+
+    expandTemplate(templateStr) {
+        let expanded = templateStr;
+        const regex = /\[模板:([^\]]+)\]/g;
+        let match;
+        
+        while ((match = regex.exec(expanded)) !== null) {
+            const [fullMatch, templateName] = match;
+            const templateContent = this.getCurrentTemplateContent(templateName.trim());
+            if (templateContent) {
+                expanded = expanded.replace(fullMatch, this.expandTemplate(templateContent));
+            } else {
+                expanded = expanded.replace(fullMatch, `[缺失模板:${templateName}]`);
+            }
+        }
+        
+        return expanded;
+    }
+
+    pickWordByConstraints(posConstraints, tagConstraints, words) {
+        let filtered = words;
+        
+        if (posConstraints.length > 0) {
+            filtered = filtered.filter(w => posConstraints.includes(w.pos));
+        }
+        
+        if (tagConstraints.length > 0) {
+            filtered = filtered.filter(w => {
+                const wordTags = w.tags || [];
+                return tagConstraints.some(tag => wordTags.includes(tag));
+            });
+        }
+        
+        if (filtered.length === 0) return null;
+        return filtered[Math.floor(Math.random() * filtered.length)];
+    }
+
+    generate(templateName) {
+        const select = document.getElementById('template-select');
+        const resultArea = document.getElementById('result-area');
+        
+        if(select.options.length === 0) {
+            alert("暂无可用模板，请先在模板页添加。");
+            return;
+        }
+
+        const selectedName = templateName || select.value;
+        const templateStr = this.getCurrentTemplateContent(selectedName);
+        
+        if (!templateStr) {
+            resultArea.value = "未找到模板内容";
+            return;
+        }
+
+        const expandedTemplate = this.expandTemplate(templateStr);
+        const rules = this.parser.parse(expandedTemplate);
+        
+        let result = "";
+
+        for (const rule of rules) {
+            if (rule.type === 'static') {
+                result += rule.value;
+            } else if (rule.type === 'rule') {
+                let selectedText = '';
+                
+                switch (rule.actualConstraintType) {
+                    case '模板':
+                        selectedText = `[模板:${rule.constraintValues[0]}]`;
+                        break;
+                        
+                    case '词性':
+                        const wordByPos = this.pickWordByConstraints(
+                            rule.constraintValues, 
+                            [], 
+                            this.library.words
+                        );
+                        selectedText = wordByPos ? wordByPos.text : `[缺失词性:${rule.constraintValues.join(',')}]`;
+                        break;
+                        
+                    case '词语标签':
+                        const wordByTag = this.pickWordByConstraints(
+                            [], 
+                            rule.constraintValues, 
+                            this.library.words
+                        );
+                        selectedText = wordByTag ? wordByTag.text : `[缺失词语标签:${rule.constraintValues.join(',')}]`;
+                        break;
+                        
+                    case '短语标签':
+                        const phraseByTag = this.pickWordByConstraints(
+                            [], 
+                            rule.constraintValues, 
+                            this.phraseLibrary.phrases
+                        );
+                        selectedText = phraseByTag ? phraseByTag.text : `[缺失短语标签:${rule.constraintValues.join(',')}]`;
+                        break;
+                        
+                    default:
+                        selectedText = `[不支持的类型:${rule.constraintType}]`;
+                }
+                
+                result += selectedText;
+            }
+        }
+
+        resultArea.value = result;
+        this.animateGeneration(resultArea);
+    }
+    
+    animateGeneration(element) {
+        element.style.animation = 'glow 0.8s ease-in-out';
+        setTimeout(() => {
+            element.style.animation = '';
+        }, 800);
+    }
+}
+
+/**
+ * 模块 4: 模板管理器
+ */
+const templateManager = {
+    currentEditingTemplate: null,
+    
+    showAddTemplateForm: function() {
+        document.getElementById('template-list-section').style.display = 'none';
+        document.getElementById('add-template-form').style.display = 'block';
+        document.getElementById('form-title').textContent = '添加新模板';
+        document.getElementById('template-name').value = '';
+        document.getElementById('template-editor').value = '';
+        document.getElementById('template-save-msg').textContent = '';
+        this.currentEditingTemplate = null;
+    },
+    
+    hideAddTemplateForm: function() {
+        document.getElementById('add-template-form').style.display = 'none';
+        document.getElementById('template-list-section').style.display = 'block';
+        this.currentEditingTemplate = null;
+    },
+    
+    editTemplate: function(name) {
+        const template = generator.savedTemplates.find(t => t.name === name);
+        if (!template) return;
+        
+        this.currentEditingTemplate = name;
+        document.getElementById('template-list-section').style.display = 'none';
+        document.getElementById('add-template-form').style.display = 'block';
+        document.getElementById('form-title').textContent = '编辑模板';
+        document.getElementById('template-name').value = template.name;
+        document.getElementById('template-editor').value = template.content;
+        document.getElementById('template-save-msg').textContent = '';
+    },
+    
+    saveCurrentTemplate: function() {
+        const name = document.getElementById('template-name').value.trim();
+        const content = document.getElementById('template-editor').value.trim();
+        
+        if (!name || !content) {
+            document.getElementById('template-save-msg').textContent = '模板名称和内容不能为空！';
+            document.getElementById('template-save-msg').style.color = 'red';
+            return;
+        }
+        
+        let result;
+        if (this.currentEditingTemplate) {
+            result = generator.updateTemplate(this.currentEditingTemplate, name, content);
+        } else {
+            result = generator.addTemplate(name, content);
+        }
+        
+        document.getElementById('template-save-msg').textContent = result.message;
+        document.getElementById('template-save-msg').style.color = result.success ? 'green' : 'red';
+        
+        if (result.success) {
+            this.renderTemplateList();
+            setTimeout(() => {
+                this.hideAddTemplateForm();
+            }, 1500);
+        }
+    },
+    
+    deleteTemplate: function(name) {
+        if (confirm(`确定删除模板"${name}"吗？`)) {
+            generator.deleteTemplate(name);
+            this.renderTemplateList();
+        }
+    },
+    
+    renderTemplateList: function() {
+        const container = document.getElementById('template-list');
+        container.innerHTML = '';
+        
+        if (generator.savedTemplates.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:20px;">暂无模板，请点击"添加新模板"创建</div>';
+            return;
+        }
+        
+        generator.savedTemplates.forEach(template => {
+            const card = document.createElement('div');
+            card.className = 'template-card';
+            card.innerHTML = `
+                <h4>${template.name}</h4>
+                <p style="font-size:0.9em; color:#666; margin:5px 0;">${template.content}</p>
+                <div>
+                    <button class="action-btn" onclick="templateManager.editTemplate('${template.name}')">编辑</button>
+                    <button class="action-btn danger-btn" onclick="templateManager.deleteTemplate('${template.name}')">删除</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+};
+
+/**
+ * 模块 5: 主题管理
+ */
+const themeManager = {
+    storageKey: 'text-gen-theme',
+    
+    presetThemes: [
+        { id: 'default', name: '默认蓝', desc: '清爽的蓝色主题', colors: {
+            'primary-color': '#4a90e2',
+            'bg-color': '#f5f7fa',
+            'panel-bg': '#ffffff',
+            'text-color': '#333',
+            'border-color': '#ddd',
+            'sidebar-bg': '#2c3e50',
+            'sidebar-text': '#bdc3c7',
+            'sidebar-text-active': '#ffffff',
+            'input-bg': '#ffffff',
+            'tag-bg': '#e3f2fd',
+            'tag-hover-bg': '#bbdefb',
+            'table-header-bg': '#f8f9fa',
+            'table-row-hover-bg': '#f0f7ff'
+        }},
+        { id: 'dark', name: '深色模式', desc: '护眼的深色主题', colors: {
+            'primary-color': '#5a8ad8',
+            'bg-color': '#1a1a2e',
+            'panel-bg': '#16213e',
+            'text-color': '#e0e0e0',
+            'border-color': '#444',
+            'sidebar-bg': '#0f0f23',
+            'sidebar-text': '#a0a0a0',
+            'sidebar-text-active': '#ffffff',
+            'input-bg': '#1e1e3f',
+            'tag-bg': '#2d2d5a',
+            'tag-hover-bg': '#3d3d7a',
+            'table-header-bg': '#1f1f3a',
+            'table-row-hover-bg': '#2a2a4a'
+        }},
+        { id: 'pink', name: '粉红佳人', desc: '温馨的粉色主题', colors: {
+            'primary-color': '#e91e63',
+            'bg-color': '#fce4ec',
+            'panel-bg': '#ffffff',
+            'text-color': '#333',
+            'border-color': '#f8bbd0',
+            'sidebar-bg': '#ad1457',
+            'sidebar-text': '#f8bbd0',
+            'sidebar-text-active': '#ffffff',
+            'input-bg': '#ffffff',
+            'tag-bg': '#f8bbd0',
+            'tag-hover-bg': '#f48fb1',
+            'table-header-bg': '#fce4ec',
+            'table-row-hover-bg': '#fce4ec'
+        }},
+        { id: 'purple', name: '紫罗兰', desc: '优雅的紫色主题', colors: {
+            'primary-color': '#9c27b0',
+            'bg-color': '#f3e5f5',
+            'panel-bg': '#ffffff',
+            'text-color': '#333',
+            'border-color': '#ce93d8',
+            'sidebar-bg': '#6a1b9a',
+            'sidebar-text': '#e1bee7',
+            'sidebar-text-active': '#ffffff',
+            'input-bg': '#ffffff',
+            'tag-bg': '#e1bee7',
+            'tag-hover-bg': '#ce93d8',
+            'table-header-bg': '#f3e5f5',
+            'table-row-hover-bg': '#ede7f6'
+        }},
+        { id: 'green', name: '自然绿', desc: '清新的绿色主题', colors: {
+            'primary-color': '#4caf50',
+            'bg-color': '#e8f5e9',
+            'panel-bg': '#ffffff',
+            'text-color': '#333',
+            'border-color': '#a5d6a7',
+            'sidebar-bg': '#2e7d32',
+            'sidebar-text': '#c8e6c9',
+            'sidebar-text-active': '#ffffff',
+            'input-bg': '#ffffff',
+            'tag-bg': '#c8e6c9',
+            'tag-hover-bg': '#a5d6a7',
+            'table-header-bg': '#e8f5e9',
+            'table-row-hover-bg': '#c8e6c933'
+        }},
+        { id: 'orange', name: '活力橙', desc: '温暖的橙色主题', colors: {
+            'primary-color': '#ff9800',
+            'bg-color': '#fff3e0',
+            'panel-bg': '#ffffff',
+            'text-color': '#333',
+            'border-color': '#ffe0b2',
+            'sidebar-bg': '#e65100',
+            'sidebar-text': '#ffcc80',
+            'sidebar-text-active': '#ffffff',
+            'input-bg': '#ffffff',
+            'tag-bg': '#ffe0b2',
+            'tag-hover-bg': '#ffcc80',
+            'table-header-bg': '#fff3e0',
+            'table-row-hover-bg': '#fff8e1'
+        }}
+    ],
+    
+    currentThemeId: 'default',
+    customColors: {},
+    
+    init: function() {
+        const saved = localStorage.getItem(this.storageKey);
+        if (saved) {
+            const data = JSON.parse(saved);
+            this.currentThemeId = data.themeId || 'default';
+            this.customColors = data.customColors || {};
+            this.applyTheme(false); // 首次加载不使用动画
+        }
+    },
+    
+    applyTheme: function(withAnimation = true) {
+        const body = document.body;
+        const overlay = document.getElementById('theme-overlay');
+        
+        // 检查设置中是否禁用了主题动画
+        const animationEnabled = settingsManager.settings.animations.theme;
+        const useAnimation = withAnimation && animationEnabled && overlay;
+        
+        if (useAnimation) {
+            // 先应用主题
+            this._doApplyTheme(body);
+            
+            // 立即显示动画覆盖层
+            overlay.classList.remove('active');
+            // 强制重排
+            void overlay.offsetWidth;
+            overlay.classList.add('active');
+            
+            // 动画结束后移除
+            setTimeout(() => {
+                overlay.classList.remove('active');
+            }, 600);
+        } else {
+            // 无动画直接应用
+            this._doApplyTheme(body);
+        }
+        
+        // 保存
+        this.saveTheme();
+    },
+    
+    _doApplyTheme: function(body) {
+        // 移除所有主题类
+        body.classList.remove('theme-dark', 'theme-pink', 'theme-purple', 'theme-green', 'theme-orange');
+        
+        // 移除所有内联样式变量
+        const style = document.documentElement.style;
+        this.presetThemes[0].colors && Object.keys(this.presetThemes[0].colors).forEach(key => {
+            style.removeProperty('--' + key);
+        });
+        
+        if (this.currentThemeId === 'custom' && Object.keys(this.customColors).length > 0) {
+            // 应用自定义颜色
+            Object.entries(this.customColors).forEach(([key, value]) => {
+                style.setProperty('--' + key, value);
+            });
+        } else if (this.currentThemeId !== 'default') {
+            // 应用预设主题类
+            body.classList.add('theme-' + this.currentThemeId);
+        }
+    },
+    
+    selectPresetTheme: function(themeId) {
+        this.currentThemeId = themeId;
+        this.customColors = {};
+        this.applyTheme();
+        this.renderPresetThemes();
+        this.updateColorPickers();
+    },
+    
+    updateCustomColor: function(colorKey, value) {
+        // 确保颜色格式正确
+        if (!value.startsWith('#')) {
+            value = '#' + value;
+        }
+        
+        this.customColors[colorKey] = value;
+        this.currentThemeId = 'custom';
+        
+        // 实时应用
+        document.documentElement.style.setProperty('--' + colorKey, value);
+        
+        // 更新对应的文本输入框
+        const textInput = document.getElementById('custom-' + colorKey.replace('-', '') + '-text');
+        if (textInput) textInput.value = value;
+        
+        // 更新对应的颜色选择器
+        const colorInput = document.getElementById('custom-' + colorKey.replace('-', ''));
+        if (colorInput) colorInput.value = value;
+        
+        this.renderPresetThemes();
+    },
+    
+    saveCustomTheme: function() {
+        if (Object.keys(this.customColors).length === 0) {
+            document.getElementById('theme-save-msg').textContent = '请先选择自定义颜色！';
+            document.getElementById('theme-save-msg').style.color = 'red';
+            return;
+        }
+        
+        this.currentThemeId = 'custom';
+        this.saveTheme();
+        
+        document.getElementById('theme-save-msg').textContent = '自定义主题已保存！';
+        document.getElementById('theme-save-msg').style.color = 'green';
+        
+        setTimeout(() => {
+            document.getElementById('theme-save-msg').textContent = '';
+        }, 2000);
+        
+        this.renderPresetThemes();
+    },
+    
+    resetToDefault: function() {
+        this.currentThemeId = 'default';
+        this.customColors = {};
+        this.applyTheme();
+        this.renderPresetThemes();
+        this.updateColorPickers();
+    },
+    
+    saveTheme: function() {
+        localStorage.setItem(this.storageKey, JSON.stringify({
+            themeId: this.currentThemeId,
+            customColors: this.customColors
+        }));
+    },
+    
+    renderPresetThemes: function() {
+        const container = document.getElementById('preset-themes-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        this.presetThemes.forEach(theme => {
+            const isActive = this.currentThemeId === theme.id;
+            
+            const card = document.createElement('div');
+            card.className = 'theme-card' + (isActive ? ' active' : '');
+            card.onclick = () => this.selectPresetTheme(theme.id);
+            
+            const previewColors = theme.colors;
+            
+            card.innerHTML = `
+                <div class="theme-preview">
+                    <div class="theme-preview-top" style="background-color: ${previewColors['sidebar-bg']}"></div>
+                    <div class="theme-preview-bottom">
+                        <div class="theme-preview-left" style="background-color: ${previewColors['primary-color']}"></div>
+                        <div class="theme-preview-right" style="background-color: ${previewColors['bg-color']}">
+                            <div style="width: 70%; height: 60%; margin: 10% auto; background-color: ${previewColors['panel-bg']}; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="theme-info">
+                    <div class="theme-name">${theme.name}</div>
+                    <div class="theme-desc">${theme.desc}</div>
+                </div>
+                ${isActive ? '<span style="color: var(--primary-color); font-weight: bold;">✓ 当前使用</span>' : ''}
+            `;
+            
+            container.appendChild(card);
+        });
+        
+        // 如果有自定义主题，添加自定义主题卡片
+        if (Object.keys(this.customColors).length > 0 || this.currentThemeId === 'custom') {
+            const isActive = this.currentThemeId === 'custom';
+            const customCard = document.createElement('div');
+            customCard.className = 'theme-card' + (isActive ? ' active' : '');
+            customCard.onclick = () => {
+                this.currentThemeId = 'custom';
+                this.applyTheme();
+                this.renderPresetThemes();
+            };
+            
+            const previewColors = Object.keys(this.customColors).length > 0 
+                ? this.customColors 
+                : this.presetThemes[0].colors;
+            
+            customCard.innerHTML = `
+                <div class="theme-preview">
+                    <div class="theme-preview-top" style="background-color: ${previewColors['sidebar-bg'] || '#2c3e50'}"></div>
+                    <div class="theme-preview-bottom">
+                        <div class="theme-preview-left" style="background-color: ${previewColors['primary-color'] || '#4a90e2'}"></div>
+                        <div class="theme-preview-right" style="background-color: ${previewColors['bg-color'] || '#f5f7fa'}">
+                            <div style="width: 70%; height: 60%; margin: 10% auto; background-color: ${previewColors['panel-bg'] || '#ffffff'}; border-radius: 4px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="theme-info">
+                    <div class="theme-name">自定义主题</div>
+                    <div class="theme-desc">您创建的专属主题</div>
+                </div>
+                ${isActive ? '<span style="color: var(--primary-color); font-weight: bold;">✓ 当前使用</span>' : ''}
+            `;
+            
+            container.appendChild(customCard);
+        }
+    },
+    
+    updateColorPickers: function() {
+        const defaultColors = this.presetThemes[0].colors;
+        let currentColors = defaultColors;
+        
+        if (this.currentThemeId === 'custom' && Object.keys(this.customColors).length > 0) {
+            currentColors = { ...defaultColors, ...this.customColors };
+        } else if (this.currentThemeId !== 'default') {
+            const theme = this.presetThemes.find(t => t.id === this.currentThemeId);
+            if (theme) {
+                currentColors = theme.colors;
+            }
+        }
+        
+        // 更新所有颜色选择器
+        const colorMap = {
+            'primary-color': 'primary',
+            'bg-color': 'bg',
+            'panel-bg': 'panel',
+            'text-color': 'text',
+            'border-color': 'border',
+            'sidebar-bg': 'sidebar'
+        };
+        
+        Object.entries(colorMap).forEach(([cssKey, inputKey]) => {
+            const colorInput = document.getElementById('custom-' + inputKey);
+            const textInput = document.getElementById('custom-' + inputKey + '-text');
+            const value = currentColors[cssKey] || defaultColors[cssKey];
+            
+            if (colorInput) colorInput.value = value;
+            if (textInput) textInput.value = value;
+        });
+    }
+};
+
+/**
+ * 设置管理器
+ */
+const settingsManager = {
+    storageKey: 'text-gen-settings',
+    
+    settings: {
+        animations: {
+            theme: true,
+            page: true,
+            button: true,
+            card: true,
+            dangerPulse: true
+        },
+        animationSpeed: 1.0,
+        newButtonStyle: true
+    },
+    
+    init: function() {
+        const saved = localStorage.getItem(this.storageKey);
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                this.settings = { ...this.settings, ...data };
+            } catch (e) {
+                console.error('Failed to load settings', e);
+            }
+        }
+        this.applyAllSettings();
+    },
+    
+    updateUI: function() {
+        // 更新所有开关状态
+        document.getElementById('animation-theme-toggle').checked = this.settings.animations.theme;
+        document.getElementById('animation-page-toggle').checked = this.settings.animations.page;
+        document.getElementById('animation-button-toggle').checked = this.settings.animations.button;
+        document.getElementById('animation-card-toggle').checked = this.settings.animations.card;
+        document.getElementById('animation-danger-pulse-toggle').checked = this.settings.animations.dangerPulse;
+        document.getElementById('button-style-toggle').checked = this.settings.newButtonStyle;
+        
+        // 更新动画速度
+        document.getElementById('animation-speed').value = this.settings.animationSpeed;
+        document.getElementById('animation-speed-value').textContent = this.settings.animationSpeed.toFixed(1) + 'x';
+    },
+    
+    toggleAnimation: function(type) {
+        this.settings.animations[type] = !this.settings.animations[type];
+        this.saveSettings();
+        this.applyAnimationSetting(type);
+    },
+    
+    applyAnimationSetting: function(type) {
+        const body = document.body;
+        
+        switch(type) {
+            case 'theme':
+                // 通过类名控制主题动画
+                if (!this.settings.animations.theme) {
+                    body.classList.add('no-theme-animation');
+                } else {
+                    body.classList.remove('no-theme-animation');
+                }
+                break;
+            case 'page':
+                if (!this.settings.animations.page) {
+                    body.classList.add('no-page-animation');
+                } else {
+                    body.classList.remove('no-page-animation');
+                }
+                break;
+            case 'button':
+                if (!this.settings.animations.button) {
+                    body.classList.add('no-button-animation');
+                } else {
+                    body.classList.remove('no-button-animation');
+                }
+                break;
+            case 'card':
+                if (!this.settings.animations.card) {
+                    body.classList.add('no-card-animation');
+                } else {
+                    body.classList.remove('no-card-animation');
+                }
+                break;
+            case 'dangerPulse':
+                if (!this.settings.animations.dangerPulse) {
+                    body.classList.add('no-danger-pulse-animation');
+                } else {
+                    body.classList.remove('no-danger-pulse-animation');
+                }
+                break;
+        }
+    },
+    
+    updateAnimationSpeed: function(speed) {
+        this.settings.animationSpeed = parseFloat(speed);
+        document.getElementById('animation-speed-value').textContent = this.settings.animationSpeed.toFixed(1) + 'x';
+        this.saveSettings();
+        this.applyAnimationSpeed();
+    },
+    
+    toggleButtonStyle: function() {
+        this.settings.newButtonStyle = !this.settings.newButtonStyle;
+        this.saveSettings();
+        this.applyButtonStyle();
+    },
+    
+    applyButtonStyle: function() {
+        const body = document.body;
+        if (this.settings.newButtonStyle) {
+            body.classList.add('new-button-style');
+        } else {
+            body.classList.remove('new-button-style');
+        }
+    },
+    
+    applyAnimationSpeed: function() {
+        const style = document.documentElement.style;
+        style.setProperty('--animation-speed-multiplier', this.settings.animationSpeed);
+    },
+    
+    applyAllSettings: function() {
+        // 应用所有动画开关
+        Object.keys(this.settings.animations).forEach(type => {
+            this.applyAnimationSetting(type);
+        });
+        // 应用动画速度
+        this.applyAnimationSpeed();
+        // 应用按钮样式
+        this.applyButtonStyle();
+    },
+    
+    resetAll: function() {
+        if (confirm('确定要重置所有设置吗？')) {
+            this.settings = {
+                animations: {
+                    theme: true,
+                    page: true,
+                    button: true,
+                    card: true,
+                    dangerPulse: true
+                },
+                animationSpeed: 1.0,
+                newButtonStyle: true
+            };
+            this.saveSettings();
+            this.applyAllSettings();
+            this.updateUI();
+        }
+    },
+    
+    saveSettings: function() {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.settings));
+    }
+};
+
+/**
+ * 初始化应用
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    // 加载折叠菜单状态
+    loadCollapseStates();
+    
+    window.library = new WordLibrary();
+    window.library.load();
+    
+    window.phrases = new PhraseLibrary();
+    window.phrases.load();
+    
+    const parser = new TemplateParser();
+    window.generator = new TextGenerator(window.library, window.phrases, parser);
+    
+    // 初始化设置管理（在主题管理之前）
+    settingsManager.init();
+    
+    // 初始化主题管理
+    themeManager.init();
+    
+    if (window.pendingPageSwitch) {
+        window.ui.switchPage(window.pendingPageSwitch);
+        delete window.pendingPageSwitch;
+    }
+    
+    templateManager.renderTemplateList();
+});
+</script>
+</body>
+</html>
